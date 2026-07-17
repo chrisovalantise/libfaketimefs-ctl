@@ -11,10 +11,15 @@ import time
 libfaketimefs_botocore.patch_botocore()
 
 FAKETIME_REALTIME_FILE = os.environ.get('FAKETIME_REALTIME_FILE')
+DYNAMODB_ENDPOINT_URL = os.environ.get('LIBFAKETIMEFS_DYNAMODB_ENDPOINT_URL')
 
 Command = collections.namedtuple('Command', 'ref, time1, time2, rate')
 
-dynamodb = boto3.client('dynamodb')
+dynamodb_kwargs = {}
+if DYNAMODB_ENDPOINT_URL:
+    dynamodb_kwargs['endpoint_url'] = DYNAMODB_ENDPOINT_URL
+
+dynamodb = boto3.client('dynamodb', **dynamodb_kwargs)
 
 
 def calculate_fake_time(command, now=None):

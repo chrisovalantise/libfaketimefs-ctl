@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "libfaketimefs-ctl"
+version = "0.0.9"
+description = "libfaketimefs controller"
+requires-python = ">=3.8"
+license = "MIT"
+authors = [
+  { name = "Raymond Butcher", email = "ray.butcher@claranet.uk" },
+]
+urls = { Homepage = "https://github.com/chrisovalantise/libfaketimefs-ctl" }
+dependencies = [
+  "boto3",
+  "libfaketimefs-botocore>=0.0.2",
+  "python-dateutil",
+]
+
+[project.scripts]
+libfaketimefs-ctl = "libfaketimefs_ctl.cli:main"
+
+[dependency-groups]
+dev = ["flake8", "pytest"]
+
+[tool.setuptools.packages.find]
+include = ["libfaketimefs_ctl*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

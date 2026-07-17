@@ -1,0 +1,204 @@
+import argparse
+import datetime
+import json
+import sys
+import time
+
+from dateutil.parser import parse as parse_date
+
+from libfaketimefs_ctl import (
+    Command,
+    calculate_fake_time,
+    calculate_status,
+    format_command,
+    get_time,
+    read_command,
+    read_commands,
+    send_command,
+    write_command,
+)
+
+COMMAND_DELAY = 5
+
+
+def parse_timestamp(value):
+    if value == 'now':
+        return int(get_time())
+    else:
+        return int(time.mktime(parse_date(value).timetuple()))
+
+
+def parse_timestamp_and_rate(value):
+    value, rate = value.rsplit(' ', 1)
+    timestamp = parse_timestamp(value)
+    rate = int(rate)
+    if rate < 1:
+        raise ValueError('rate must be at least 1')
+    return (timestamp, rate)
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(prog='libfaketimefs-ctl')
+    parser.add_argument(
+        '--table',
+        required=True,
+        help='DynamoDB table to use',
+    )
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument(
+        '--out',
+        help='Read commands from the table and write to this file',
+    )
+    group.add_argument(
+        '--ff',
+        type=parse_timestamp_and_rate,
+        help='Write a fast forward command to the table',
+    )
+    group.add_argument(
+        '--jump',
+        type=parse_timestamp,
+        help='Write a jump command to the table',
+    )
+    group.add_argument(
+        '--query',
+        action='store_true',
+        help='Query the fake time and status',
+    )
+    group.add_argument(
+        '--stop',
+        action='store_true',
+        help='Write a stop command to the table',
+    )
+    return parser
+
+
+def run_out(args):
+    print('Reading from DynamoDB table {} and writing to {}'.format(
+        args.table,
+        args.out,
+    ))
+    for command in read_commands(table=args.table):
+        write_command(command=command, path=args.out)
+
+
+def run_ff(args):
+    print('Sending fast forward command to DynamoDB table {}'.format(
+        args.table,
+    ))
+
+    command = read_command(table=args.table)
+
+    if command and calculate_status(command) == 'MOVING':
+        sys.stderr.write('Error: already fast forwarding\n')
+        raise SystemExit(1)
+
+    timestamp, rate = args.ff
+    now = int(get_time())
+
+    if command:
+        fake_time = int(calculate_fake_time(command))
+    else:
+        fake_time = now
+
+    if timestamp < fake_time:
+        sys.stderr.write('Error: cannot fast forward backwards\n')
+        raise SystemExit(1)
+
+    send_command(
+        command=Command(ref=now, time1=fake_time, time2=timestamp, rate=rate),
+        table=args.table,
+    )
+
+
+def run_jump(args):
+    print('Sending jump command to DynamoDB table {}'.format(args.table))
+
+    timestamp = args.jump
+    now = int(get_time())
+
+    send_command(
+        command=Command(ref=now, time1=timestamp, time2=timestamp, rate=1),
+        table=args.table,
+    )
+
+
+def run_query(args):
+    command = read_command(table=args.table)
+
+    timestamp_real = int(get_time())
+    datetime_real = datetime.datetime.fromtimestamp(timestamp_real)
+
+    if command:
+        command_string = format_command(command)
+        timestamp_fake = int(calculate_fake_time(command))
+        status = calculate_status(command)
+    else:
+        command_string = ''
+        timestamp_fake = timestamp_real
+        status = 'IDLE'
+
+    datetime_fake = datetime.datetime.fromtimestamp(timestamp_fake)
+
+    result = {
+        'command': command_string,
+        'datetime': {
+            'fake': datetime_fake.isoformat(),
+            'real': datetime_real.isoformat(),
+        },
+        'status': status,
+        'timestamp': {
+            'fake': timestamp_fake,
+            'real': timestamp_real,
+        },
+    }
+    print(json.dumps(result, indent=2, sort_keys=True))
+
+
+def run_stop(args):
+    print('Sending stop command to DynamoDB table {}'.format(args.table))
+
+    command = read_command(table=args.table)
+    if not command or calculate_status(command) != 'MOVING':
+        sys.stderr.write('Error: already stopped\n')
+        raise SystemExit(1)
+
+    # Calculate the fake time a few seconds from now, and send a command to
+    # stop at that point in time. This avoids a command that jumps back in time.
+    fake_time = calculate_fake_time(command)
+    stop_time = int(fake_time + (COMMAND_DELAY * command.rate))
+
+    send_command(
+        command=Command(
+            ref=command.ref,
+            time1=command.time1,
+            time2=stop_time,
+            rate=command.rate,
+        ),
+        table=args.table,
+    )
+
+    # Wait until stopped before exiting.
+    time.sleep(COMMAND_DELAY)
+    while True:
+        command = read_command(table=args.table)
+        if calculate_status(command) == 'IDLE':
+            break
+        time.sleep(1)
+
+
+def main(argv=None):
+    args = build_parser().parse_args(argv)
+    if args.out:
+        run_out(args)
+    elif args.ff:
+        run_ff(args)
+    elif args.jump:
+        run_jump(args)
+    elif args.query:
+        run_query(args)
+    elif args.stop:
+        run_stop(args)
+
+
+if __name__ == '__main__':
+    main()

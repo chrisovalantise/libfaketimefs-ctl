@@ -6,3 +6,6 @@
 build/
 dist/
 terraform.tfstate*
+
+# Local-only GitHub release upload token/settings.
+.env.upload

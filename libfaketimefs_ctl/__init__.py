@@ -1,25 +1,33 @@
-from __future__ import print_function
-
-import boto3
 import collections
 import datetime
-import libfaketimefs_botocore
 import os
 import time
 
-
-libfaketimefs_botocore.patch_botocore()
-
 FAKETIME_REALTIME_FILE = os.environ.get('FAKETIME_REALTIME_FILE')
-DYNAMODB_ENDPOINT_URL = os.environ.get('LIBFAKETIMEFS_DYNAMODB_ENDPOINT_URL')
+DYNAMODB_ENDPOINT_URL_ENV = 'LIBFAKETIMEFS_DYNAMODB_ENDPOINT_URL'
 
 Command = collections.namedtuple('Command', 'ref, time1, time2, rate')
 
-dynamodb_kwargs = {}
-if DYNAMODB_ENDPOINT_URL:
-    dynamodb_kwargs['endpoint_url'] = DYNAMODB_ENDPOINT_URL
+_dynamodb = None
 
-dynamodb = boto3.client('dynamodb', **dynamodb_kwargs)
+
+def _get_dynamodb_kwargs():
+    endpoint_url = os.environ.get(DYNAMODB_ENDPOINT_URL_ENV)
+    if endpoint_url:
+        return {'endpoint_url': endpoint_url}
+    return {}
+
+
+def get_dynamodb():
+    """Create the DynamoDB client lazily so importing this module does not
+    require boto3 credentials or network access (keeps doctests cheap)."""
+    global _dynamodb
+    if _dynamodb is None:
+        import boto3
+        import libfaketimefs_botocore  # type: ignore[import-not-found]
+        libfaketimefs_botocore.patch_botocore()
+        _dynamodb = boto3.client('dynamodb', **_get_dynamodb_kwargs())
+    return _dynamodb
 
 
 def calculate_fake_time(command, now=None):
@@ -130,7 +138,7 @@ def get_time():
 
 
 def read_command(table):
-    response = dynamodb.get_item(
+    response = get_dynamodb().get_item(
         TableName=table,
         Key={
             'Id': {
@@ -161,7 +169,7 @@ def log_command(command):
 
 def send_command(command, table):
     log_command(command)
-    dynamodb.put_item(
+    get_dynamodb().put_item(
         TableName=table,
         Item={
             'Id': {

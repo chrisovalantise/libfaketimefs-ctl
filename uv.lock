@@ -254,7 +254,7 @@ wheels = [
 
 [[package]]
 name = "libfaketimefs-ctl"
-version = "0.0.9"
+version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "boto3", version = "1.37.38", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "libfaketimefs-ctl"
-version = "0.0.9"
+version = "1.0.0"
 description = "libfaketimefs controller"
 requires-python = ">=3.8"
 license = "MIT"

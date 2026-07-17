@@ -21,7 +21,7 @@ PYTHON ?= python3
 UV ?= uv
 
 UV_TOOL_RUN := $(UV) run --no-project
-GITHUB_REPOSITORY ?= chrisovalantise/libfaketimefs-ctl
+GITHUB_REPOSITORY := chrisovalantise/libfaketimefs-ctl
 
 .PHONY: test
 test:
@@ -33,8 +33,8 @@ test:
 build:
 	$(UV) build
 
-.PHONY: upload
-upload: build
+.PHONY: push
+push: build
 	@test -n "$${GH_TOKEN:-$${GITHUB_TOKEN:-}}" || (echo "Set GH_TOKEN or GITHUB_TOKEN with repo write access" >&2; exit 1)
 	@token="$${GH_TOKEN:-$${GITHUB_TOKEN:-}}"; \
 	repo="$(GITHUB_REPOSITORY)"; \
@@ -77,6 +77,9 @@ upload: build
 			--data-binary @"$${artifact}" \
 			"$${upload_api}/$${release_id}/assets?name=$${name}" >/dev/null; \
 	done
+
+.PHONY: upload
+upload: push
 
 .PHONY: clean
 clean:

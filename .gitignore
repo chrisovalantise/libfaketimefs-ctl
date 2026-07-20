@@ -1,11 +1,10 @@
 *.egg-info/
 *.pyc
 .direnv/
+.pytest_cache/
 .terraform/
+.venv/
 .vscode/
 build/
 dist/
 terraform.tfstate*
-
-# Local-only GitHub release upload token/settings.
-.env.upload
